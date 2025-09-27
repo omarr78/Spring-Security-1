@@ -24,6 +24,13 @@ public String getSessionId(HttpServletRequest request) {
 
 ## 3. Customizing / Dynamically Changing Username & Password
 
+* Setting username and password in application.propertise
+
+```
+spring.security.user.name=omar
+spring.security.user.password=123
+```
+
 * During authentication, the `UsernamePasswordAuthenticationFilter` checks whether a username/password is defined in your application’s properties.
 * If not, the system should create or use default credentials
 
@@ -174,7 +181,53 @@ you configure security by defining a `SecurityFilterChain` bean.
 
    Without those configurations on `http`, the resulting `SecurityFilterChain` may do nothing or default behavior which might not match your intentions.
 
+
+	### you can do that in csrf
+	
+	``` java
+	@Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
+ 
+		Customizer<CsrfConfigurer<HttpSecurity>> csrfFilterCustomizer = new Customizer<>() {
+			@Override
+			public void customize(CsrfConfigurer<HttpSecurity> httpSecurityCsrfConfigurer) {
+				httpSecurityCsrfConfigurer.disable();
+			}
+		};
+		
+		httpSecurity.csrf(csrfFilterCustomizer);
+
+	}
+	```
+
 ---
+
+## From Static Credentials → Database-Backed Authentication
+
+### What we had so far
+
+* Up to now, you could log in using a **single username + password** stored in `application.properties`.
+* This works for a single user, but it’s not scalable. You want to switch to **database storage** so you can have many users, roles, etc.
+
+### What changes with database authentication
+
+When you submit username and password:
+
+1. The request arrives at the authentication filter (e.g. the `UsernamePasswordAuthenticationFilter`) as an **unauthenticated** `Authentication` object (i.e. `isAuthenticated() == false`).
+2. That object is passed to the **AuthenticationManager (or chain of AuthenticationProviders)**.
+3. `DaoAuthenticationProvider` calls your `UserDetailsService` to fetch user data.
+4. An `AuthenticationProvider` checks the credentials (against the database, in this new setup).
+5. If valid, it returns a fully **authenticated** `Authentication` object (with authorities, principal, etc.).
+6. Spring Security then places that `Authentication` into the `SecurityContext`, and the user is considered “logged in.”
+7. Future requests use that context (via session or token) so the user stays authenticated.
+
+
+<img width="1100" height="481" alt="securityFlow" src="https://github.com/user-attachments/assets/617d8dfa-50b7-475a-bfe0-d1b23cce9853" />
+
+---
+
+
+
 
 
 
