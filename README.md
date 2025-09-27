@@ -226,6 +226,116 @@ When you submit username and password:
 
 ---
 
+## Customizing the Authentication Provider in Spring Security
+
+### 1. Why customize?
+
+By default, Spring Security uses its own **AuthenticationProvider** internally to handle username and password authentication.
+If you want to connect to a **database** (or even an external service), you’ll often need to replace this with your **own authentication provider** setup.
+
+
+### 2. What is an AuthenticationProvider?
+
+* It’s an **interface** in Spring Security.
+* There are multiple implementations available. One common implementation is **`DaoAuthenticationProvider`**, which retrieves user details from a database (via `UserDetailsService`) and compares passwords (via a `PasswordEncoder`).
+* To use it, you just need to configure two things:
+
+  1. **PasswordEncoder** (e.g. BCrypt)
+  2. **UserDetailsService** (your custom implementation for fetching users)
+
+
+### 3. Defining the Beans
+
+```java
+@Bean
+public PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
+}
+
+@Autowired
+private CustomUserDetailsService userDetailsService;
+
+@Bean
+public AuthenticationProvider authenticationProvider() {
+    DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+    authProvider.setPasswordEncoder(passwordEncoder());
+    authProvider.setUserDetailsService(userDetailsService);
+
+    return authProvider;
+}
+```
+
+Here:
+
+* `passwordEncoder()` → ensures user passwords are hashed & verified securely.
+* `authenticationProvider()` → creates a `DaoAuthenticationProvider` configured with your encoder + custom user details service.
+
+This replaces the default provider with **your own customized authentication flow**.
+
+
+### 4. Implementing `UserDetailsService`
+
+`UserDetailsService` is also an interface. You must implement it to tell Spring how to fetch users from your data source.
+
+Example:
+
+```java
+@Service
+public class CustomUserDetailsService implements UserDetailsService {
+
+    private final UserRepository userRepository;
+
+    public CustomUserDetailsService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        User user = userRepository.findByEmail(username)
+                .orElseThrow(() -> new UsernameNotFoundException("Email not found: " + username));
+
+        return org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail())
+                .password(user.getPassword())
+                .roles("USER") // you can fetch roles dynamically from DB as well
+                .build();
+    }
+}
+```
+
+Here:
+
+* Spring will call `loadUserByUsername()` when someone tries to log in.
+* You fetch the user from the database.
+* If found, you return a Spring Security `UserDetails` object (which includes username, password, and roles).
+* If not found, throw `UsernameNotFoundException`.
+
+
+### 5. Authentication Flow (with custom provider)
+
+1. User submits username & password.
+2. Spring Security creates an **unauthenticated Authentication object**.
+3. It calls your configured `AuthenticationProvider` (`DaoAuthenticationProvider`).
+4. That provider calls your `CustomUserDetailsService.loadUserByUsername()`.
+5. The returned `UserDetails` is checked against the submitted password using the `PasswordEncoder`.
+6. If valid → an **authenticated Authentication object** is returned and stored in the `SecurityContext`.
+7. If invalid → an exception is thrown, and authentication fails.
+
+---
+
+```java
+@Bean
+public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+    return configuration.getAuthenticationManager();
+}
+```
+
+* This exposes Spring Security’s internal `AuthenticationManager` as a bean, so you can `@Autowired` it elsewhere (e.g. in custom filters or services).
+* `AuthenticationConfiguration` already knows about your configured `AuthenticationProvider`s, `UserDetailsService`, and `PasswordEncoder`, so calling `getAuthenticationManager()` gives you the fully composed manager.
+* Without this bean, you may not have access to the `AuthenticationManager` in parts of your application outside the usual security filters.
+
+---
+
 
 
 
