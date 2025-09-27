@@ -91,5 +91,90 @@ Then you can send parts of it (e.g. the token’s value) back to the client, so 
 
 ---
 
+## 5. Spring Security Configuration
+
+### 1. **Define a configuration class**
+   Annotate your class with:
+
+   ```java
+   @Configuration
+   @EnableWebSecurity
+   public class SecurityConfig {
+       // beans and security setup go here
+   }
+   ```
+
+   * `@Configuration` tells Spring that this class contains bean definitions.
+   * `@EnableWebSecurity` enables Spring Security’s web security support and tells Spring not to use its default configuration, but to use what you define.
+
+
+### 2. **Customize the security filter chain** 
+
+you configure security by defining a `SecurityFilterChain` bean.
+
+   ```java
+   @Bean
+   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+       // configure your security rules, authentication, etc.
+       return http.build();
+   }
+   ```
+
+   The `HttpSecurity` object allows you to customize how security behaves 
+   (which endpoints require authentication, what kind of login mechanism you use, CSRF, session management, etc.).
+   When you call `http.build()`, Spring builds and returns the configured `SecurityFilterChain`.
+
+
+2. **Customize the security filter chain**
+   Starting from Spring Security 5.4 (and encouraged since deprecation of `WebSecurityConfigurerAdapter`), you configure security by defining a `SecurityFilterChain` bean. ([Home][1])
+
+   ```java
+   @Bean
+   public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+       // configure your security rules, authentication, etc.
+       return http.build();
+   }
+   ```
+
+   The `HttpSecurity` object allows you to customize how security behaves (which endpoints require authentication, what kind of login mechanism you use, CSRF, session management, etc.). When you call `http.build()`, Spring builds and returns the configured `SecurityFilterChain`.
+
+3. **Make sure your configuration is “applied”**
+   It’s not enough just to return `http.build()`—you have to *configure* `http` properly before building. For example:
+
+   ```java
+
+	@Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity) throws Exception {
+        httpSecurity.csrf(AbstractHttpConfigurer::disable)
+   				.cors(Customizer.withDefaults())
+                .authorizeHttpRequests(
+                        authorizationManagerRequestMatcherRegistry ->
+                                authorizationManagerRequestMatcherRegistry.requestMatchers("/login", "/images/**").permitAll() // just allows those
+                                        .anyRequest().authenticated() // else authenticate every request
+                ).httpBasic(Customizer.withDefaults())
+
+   				// make the session statless 
+				// problem with this you can't login from your login form in browser because every request you have to pass
+				// credintials and when it goes from login form to resource it need the credintials again
+				// but in postman it works fine
+				// if you need to work correctly with browser -> disable your your form login -> it will show a pop-up to enter username and password
+                .sessionManagement(httpSecuritySessionManagementConfigurer ->
+                        httpSecuritySessionManagementConfigurer.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+				// it enables login form in browser but in postman it response a html
+   				// if you are using postman you can disable it
+   				// so to enable authentication from postman you need to add this .httpBasic(Customizer.withDefaults())
+   				// .formLogin(Customizer.withDefaults()); 
+
+   
+        return httpSecurity.build();
+    }
+   
+   ```
+
+   Without those configurations on `http`, the resulting `SecurityFilterChain` may do nothing or default behavior which might not match your intentions.
+
+---
+
 
 
